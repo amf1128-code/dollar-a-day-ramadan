@@ -86,7 +86,7 @@ export default function DonateForm({ onDonate }) {
       </label>
 
       {/* Name fields */}
-      <div className="flex gap-4 max-w-md">
+      <div className="flex items-end gap-4 max-w-md">
         <div className="flex-1">
           <label className="block text-xs tracking-widest uppercase text-warm-gray mb-2">First Name</label>
           <input
@@ -99,7 +99,7 @@ export default function DonateForm({ onDonate }) {
           />
           {errors.firstName && <p className="text-xs text-maroon mt-1">{errors.firstName}</p>}
         </div>
-        <div className="w-20">
+        <div className="w-24 shrink-0">
           <label className="block text-xs tracking-widest uppercase text-warm-gray mb-2">Last Initial</label>
           <input
             type="text"

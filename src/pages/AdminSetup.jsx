@@ -246,6 +246,48 @@ export default function AdminSetup() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleDeleteNight(index) {
+    const night = nights[index];
+    const label = night.charity_name
+      ? `Night ${night.night_number} (${night.charity_name})`
+      : `Night ${night.night_number}`;
+    if (!window.confirm(`Are you sure you want to remove ${label}? This will also unlink any donations tied to this night.`)) {
+      return;
+    }
+    if (night.id) {
+      const { error } = await supabase.from('nights').delete().eq('id', night.id);
+      if (error) {
+        setMessage(`Error deleting night: ${error.message}`);
+        logger.error('setup', 'Failed to delete night', { nightNumber: night.night_number, code: error.code, message: error.message });
+        return;
+      }
+      logger.info('setup', 'Night deleted', { nightNumber: night.night_number });
+    }
+    setNights((prev) => prev.filter((_, i) => i !== index));
+    setMessage(`${label} removed.`);
+  }
+
+  async function handleDeleteCampaign() {
+    const input = window.prompt(
+      `This will permanently delete "${campaign.name}" and ALL its nights, donations, and accounts.\n\nType CONFIRM to proceed:`
+    );
+    if (input !== 'CONFIRM') {
+      if (input !== null) setMessage('Campaign deletion cancelled — you must type exactly CONFIRM.');
+      return;
+    }
+    const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id);
+    if (error) {
+      setMessage(`Error deleting campaign: ${error.message}`);
+      logger.error('setup', 'Failed to delete campaign', { code: error.code, message: error.message });
+      return;
+    }
+    logger.info('setup', 'Campaign deleted', { name: campaign.name });
+    setCampaign(null);
+    setNights([]);
+    setMessage(null);
+    await loadData();
+  }
+
   async function handleSave() {
     if (!campaign) return;
     setSaving(true);
@@ -471,6 +513,7 @@ export default function AdminSetup() {
                   <th className="py-2 px-2 text-left">URL</th>
                   <th className="py-2 px-2 text-center">Zakat</th>
                   <th className="py-2 px-2 text-left">Account</th>
+                  <th className="py-2 px-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -532,6 +575,15 @@ export default function AdminSetup() {
                         ))}
                       </select>
                     </td>
+                    <td className="py-2 px-2 text-center">
+                      <button
+                        onClick={() => handleDeleteNight(i)}
+                        className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs"
+                        title={`Remove Night ${night.night_number}`}
+                      >
+                        ✕
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -544,13 +596,19 @@ export default function AdminSetup() {
             </div>
           )}
 
-          <div className="mt-6">
+          <div className="mt-6 flex items-center gap-4">
             <button
               onClick={handleSave}
               disabled={saving}
               className="bg-maroon text-cream px-8 py-3 text-sm tracking-widest uppercase hover:bg-maroon-dark transition-colors disabled:opacity-50 cursor-pointer"
             >
               {saving ? 'Saving...' : 'Save All'}
+            </button>
+            <button
+              onClick={handleDeleteCampaign}
+              className="text-xs tracking-widest uppercase text-warm-gray border-b border-warm-gray-light hover:text-maroon hover:border-maroon transition-colors cursor-pointer"
+            >
+              Delete Campaign
             </button>
           </div>
         </>
