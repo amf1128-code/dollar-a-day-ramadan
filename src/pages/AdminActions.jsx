@@ -6,6 +6,10 @@ import AdminLayout from '../components/AdminLayout';
 export default function AdminActions() {
   const [campaign, setCampaign] = useState(null);
   const [items, setItems] = useState([]);
+  const [nights, setNights] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [donations, setDonations] = useState([]);
+  const [distributions, setDistributions] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [newDescription, setNewDescription] = useState('');
 
@@ -24,19 +28,28 @@ export default function AdminActions() {
     const camp = camps[0];
     setCampaign(camp);
 
-    const { data } = await supabase
-      .from('action_items')
-      .select('*')
-      .eq('campaign_id', camp.id)
-      .order('created_at', { ascending: false });
+    const [itemRes, nightRes, acctRes, donRes, distRes] = await Promise.all([
+      supabase.from('action_items').select('*').eq('campaign_id', camp.id).order('created_at', { ascending: false }),
+      supabase.from('nights').select('*').eq('campaign_id', camp.id).order('night_number'),
+      supabase.from('accounts').select('*').eq('campaign_id', camp.id),
+      supabase.from('donations').select('*').eq('campaign_id', camp.id).eq('is_confirmed', true),
+      supabase.from('lump_sum_distributions').select('*'),
+    ]);
 
-    setItems(data || []);
+    setItems(itemRes.data || []);
+    setNights(nightRes.data || []);
+    setAccounts(acctRes.data || []);
+    setDonations(donRes.data || []);
+    setDistributions(distRes.data || []);
   }
 
   async function toggleComplete(item) {
+    const newCompleted = !item.is_completed;
+
+    // Update the action item
     const { error } = await supabase
       .from('action_items')
-      .update({ is_completed: !item.is_completed })
+      .update({ is_completed: newCompleted })
       .eq('id', item.id);
 
     if (error) {
@@ -44,7 +57,20 @@ export default function AdminActions() {
       return;
     }
 
-    logger.info('actions', 'Action item toggled', { id: item.id, completed: !item.is_completed });
+    // If this is a transfer action item, update related distributions
+    if (item.related_donation_id && item.to_account_id) {
+      const { error: distError } = await supabase
+        .from('lump_sum_distributions')
+        .update({ is_transferred: newCompleted })
+        .eq('donation_id', item.related_donation_id)
+        .eq('account_id', item.to_account_id);
+
+      if (distError) {
+        logger.error('actions', 'Failed to update distributions', { code: distError.code, message: distError.message });
+      }
+    }
+
+    logger.info('actions', 'Action item toggled', { id: item.id, completed: newCompleted });
     loadData();
   }
 
@@ -67,6 +93,31 @@ export default function AdminActions() {
     loadData();
   }
 
+  // Compute nightly "donate to charity" items for past/current nights
+  const today = new Date().toISOString().split('T')[0];
+  const donateItems = nights
+    .filter((n) => n.date <= today)
+    .map((n) => {
+      const acct = accounts.find((a) => a.id === n.account_id);
+      const directTotal = donations
+        .filter((d) => d.night_id === n.id && !d.is_lump_sum)
+        .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+      const distTotal = distributions
+        .filter((d) => d.night_id === n.id && d.is_transferred)
+        .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+      const total = directTotal + distTotal;
+      if (total <= 0) return null;
+      return {
+        id: `donate-${n.id}`,
+        nightNumber: n.night_number,
+        charityName: n.charity_name,
+        charityUrl: n.charity_url,
+        accountName: acct?.person_name || 'unknown',
+        total,
+      };
+    })
+    .filter(Boolean);
+
   const displayed = showAll ? items : items.filter((i) => !i.is_completed);
 
   return (
@@ -83,6 +134,23 @@ export default function AdminActions() {
           Show completed
         </label>
       </div>
+
+      {/* Nightly donation reminders */}
+      {donateItems.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-xs tracking-widest uppercase text-warm-gray mb-3">Nightly Donations</h2>
+          <div className="space-y-2">
+            {donateItems.map((item) => (
+              <div key={item.id} className="p-4 border border-gold bg-gold/10">
+                <p className="text-sm">
+                  <span className="font-serif font-bold">Night {item.nightNumber}:</span>{' '}
+                  {item.accountName} — donate <span className="font-serif text-maroon">${item.total.toFixed(2)}</span> to {item.charityName}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add new */}
       <div className="flex gap-3 mb-6">

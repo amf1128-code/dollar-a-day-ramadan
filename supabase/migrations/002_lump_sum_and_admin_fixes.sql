@@ -12,13 +12,19 @@ CREATE POLICY "Admin can insert donations"
 -- (for manual entries where the collector may differ from tonight's account)
 ALTER TABLE donations ADD COLUMN paying_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL;
 
+-- Track which account a transfer action item is for (so marking done
+-- can update the right distributions)
+ALTER TABLE action_items ADD COLUMN to_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL;
+
 -- ============================================================
 -- AUTO-DISTRIBUTE LUMP SUM DONATIONS
 -- ============================================================
 -- When a confirmed lump sum donation is inserted, this trigger:
 --   1. Splits the amount evenly across remaining nights (today + future)
 --   2. Creates lump_sum_distributions records crediting each account
+--      (paying account's own distributions are pre-marked as transferred)
 --   3. Creates aggregated action items for inter-account transfers
+--   4. Backfills paying_account_id if not set (public donations)
 
 CREATE OR REPLACE FUNCTION distribute_lump_sum()
 RETURNS TRIGGER
@@ -75,9 +81,15 @@ BEGIN
       AND n.date = v_tonight_date
       AND n.account_id IS NOT NULL
     LIMIT 1;
+
+    -- Backfill paying_account_id on the donation for future reference
+    IF v_paying_account_id IS NOT NULL THEN
+      UPDATE donations SET paying_account_id = v_paying_account_id WHERE id = NEW.id;
+    END IF;
   END IF;
 
   -- Create per-night distribution records
+  -- Paying account's own nights are pre-marked as transferred (they already hold the money)
   FOR v_night IN
     SELECT id AS night_id, night_number, account_id
     FROM nights
@@ -88,12 +100,13 @@ BEGIN
   LOOP
     v_idx := v_idx + 1;
 
-    INSERT INTO lump_sum_distributions (donation_id, night_id, amount, account_id)
+    INSERT INTO lump_sum_distributions (donation_id, night_id, amount, account_id, is_transferred)
     VALUES (
       NEW.id,
       v_night.night_id,
       CASE WHEN v_idx = v_count THEN v_last_night_cents ELSE v_per_night_cents END / 100.0,
-      v_night.account_id
+      v_night.account_id,
+      v_night.account_id = v_paying_account_id  -- true for paying account's own nights
     );
   END LOOP;
 
@@ -113,7 +126,7 @@ BEGIN
         AND d.account_id != v_paying_account_id
       GROUP BY d.account_id, a.person_name
     LOOP
-      INSERT INTO action_items (campaign_id, description, related_donation_id)
+      INSERT INTO action_items (campaign_id, description, related_donation_id, to_account_id)
       VALUES (
         v_campaign_id,
         'Transfer $' || v_transfer.total_amount
@@ -121,7 +134,8 @@ BEGIN
           || ' to ' || COALESCE(v_transfer.to_name, 'unknown')
           || ' (Nights ' || v_transfer.night_numbers || ')'
           || ' — Whole month donation from ' || NEW.donor_first_name || ' ' || NEW.donor_last_initial || '.',
-        NEW.id
+        NEW.id,
+        v_transfer.account_id
       );
     END LOOP;
   END IF;

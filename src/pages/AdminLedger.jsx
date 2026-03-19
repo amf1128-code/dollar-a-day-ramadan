@@ -106,6 +106,25 @@ export default function AdminLedger() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleDeleteDonation(donation) {
+    const label = `$${parseFloat(donation.amount).toFixed(2)} from ${donation.donor_first_name} ${donation.donor_last_initial}.`;
+    const input = window.prompt(
+      `This will permanently delete the donation: ${label}\n\nThis also removes any related distributions and action items.\n\nType CONFIRM to proceed:`
+    );
+    if (input !== 'CONFIRM') {
+      if (input !== null) alert('Deletion cancelled — you must type exactly CONFIRM.');
+      return;
+    }
+    const { error } = await supabase.from('donations').delete().eq('id', donation.id);
+    if (error) {
+      logger.error('ledger', 'Failed to delete donation', { code: error.code, message: error.message });
+      alert(`Error: ${error.message}`);
+      return;
+    }
+    logger.info('ledger', 'Donation deleted', { id: donation.id, amount: donation.amount });
+    loadData();
+  }
+
   async function handleManualSubmit() {
     if (!campaign) return;
 
@@ -266,6 +285,7 @@ export default function AdminLedger() {
               <th className="py-2 px-2 text-center">Lump</th>
               <th className="py-2 px-2 text-center">Confirmed</th>
               <th className="py-2 px-2 text-left">Date</th>
+              <th className="py-2 px-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -282,6 +302,9 @@ export default function AdminLedger() {
                   <td className="py-2 px-2 text-center">-</td>
                   <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
                   <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
+                  <td className="py-2 px-2 text-center">
+                    <button onClick={() => handleDeleteDonation(d)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
+                  </td>
                 </tr>
               );
             })}
@@ -311,6 +334,9 @@ export default function AdminLedger() {
                   <td className="py-2 px-2 text-center">Yes</td>
                   <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
                   <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
+                  <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => handleDeleteDonation(d)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
+                  </td>
                 </tr>,
                 isExpanded && dists.length > 0 && (
                   <tr key={`${d.id}-dists`}>

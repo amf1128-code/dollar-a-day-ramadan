@@ -49,10 +49,10 @@ export default function AdminAccounts() {
   function getAccountTotal(accountId) {
     const accountNightIds = nights.filter((n) => n.account_id === accountId).map((n) => n.id);
     const directDonations = donations
-      .filter((d) => d.is_confirmed && accountNightIds.includes(d.night_id))
+      .filter((d) => d.is_confirmed && !d.is_lump_sum && accountNightIds.includes(d.night_id))
       .reduce((sum, d) => sum + parseFloat(d.amount), 0);
     const lumpDistributions = distributions
-      .filter((d) => d.account_id === accountId)
+      .filter((d) => d.account_id === accountId && d.is_transferred)
       .reduce((sum, d) => sum + parseFloat(d.amount), 0);
     return directDonations + lumpDistributions;
   }
