@@ -114,12 +114,6 @@ export default function AdminActions() {
             }`}
           >
             <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={item.is_completed}
-                onChange={() => toggleComplete(item)}
-                className="mt-1 accent-maroon cursor-pointer"
-              />
               <div className="flex-1 min-w-0">
                 <p className={`text-sm leading-relaxed ${item.is_completed ? 'line-through text-warm-gray' : ''}`}>
                   {item.description}
@@ -128,6 +122,16 @@ export default function AdminActions() {
                   {new Date(item.created_at).toLocaleDateString()}
                 </p>
               </div>
+              <button
+                onClick={() => toggleComplete(item)}
+                className={`shrink-0 px-4 py-2 text-xs tracking-widest uppercase transition-colors cursor-pointer ${
+                  item.is_completed
+                    ? 'border border-warm-gray-light text-warm-gray hover:text-maroon hover:border-maroon'
+                    : 'bg-maroon text-cream hover:bg-maroon-dark'
+                }`}
+              >
+                {item.is_completed ? 'Undo' : 'Mark Done'}
+              </button>
             </div>
           </div>
         ))}
