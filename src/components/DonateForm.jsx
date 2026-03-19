@@ -81,7 +81,7 @@ export default function DonateForm({ onDonate }) {
           className="w-4 h-4 accent-maroon"
         />
         <span className="text-sm text-warm-gray-dark italic font-serif">
-          This is a lump sum for the entire month
+          I'd like to donate for the entire month and have you distribute my donation across each night
         </span>
       </label>
 
