@@ -22,6 +22,7 @@ export default function AdminLedger() {
     is_confirmed: true,
     donor_venmo_handle: '',
     donor_zelle_identifier: '',
+    paying_account_id: '',
   });
 
   useEffect(() => {
@@ -119,6 +120,7 @@ export default function AdminLedger() {
       is_confirmed: manualForm.is_confirmed,
       donor_venmo_handle: manualForm.donor_venmo_handle || null,
       donor_zelle_identifier: manualForm.donor_zelle_identifier || null,
+      paying_account_id: manualForm.paying_account_id || null,
     };
 
     const { error } = await supabase.from('donations').insert(payload);
@@ -140,6 +142,7 @@ export default function AdminLedger() {
       is_confirmed: true,
       donor_venmo_handle: '',
       donor_zelle_identifier: '',
+      paying_account_id: '',
     });
     loadData();
   }
@@ -198,6 +201,17 @@ export default function AdminLedger() {
                 return acct ? <p className="text-xs text-warm-gray mt-1">Account: {acct.person_name}</p> : null;
               })()}
             </div>
+            {manualForm.is_lump_sum && (
+              <div>
+                <label className="block text-xs tracking-widest uppercase text-warm-gray mb-1">Collected By</label>
+                <select value={manualForm.paying_account_id} onChange={(e) => setManualForm({ ...manualForm, paying_account_id: e.target.value })} className="w-full border-b border-warm-gray-light bg-transparent py-1 text-sm focus:outline-none focus:border-maroon">
+                  <option value="">Select account...</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.person_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs tracking-widest uppercase text-warm-gray mb-1">Method</label>
               <select value={manualForm.payment_method} onChange={(e) => setManualForm({ ...manualForm, payment_method: e.target.value })} className="w-full border-b border-warm-gray-light bg-transparent py-1 text-sm focus:outline-none focus:border-maroon">
