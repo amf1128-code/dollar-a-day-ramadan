@@ -16,10 +16,11 @@ DECLARE
   v_idx INT := 0;
   v_paying_account_id UUID;
   v_paying_account_name TEXT;
-  v_night_account_name TEXT;
-  v_amount_str TEXT;
   v_tonight_date DATE;
   v_campaign_id UUID;
+  v_transfer RECORD;
+  v_night_list TEXT;
+  v_amount_str TEXT;
 BEGIN
   -- Only process confirmed lump sum donations
   IF NOT NEW.is_lump_sum OR NOT NEW.is_confirmed THEN
@@ -72,26 +73,35 @@ BEGIN
       CASE WHEN v_idx = v_count THEN v_last_night_cents ELSE v_per_night_cents END / 100.0,
       v_night.account_id
     );
+  END LOOP;
 
-    -- Create action item for transfers to other accounts
-    IF v_paying_account_id IS NOT NULL AND v_night.account_id != v_paying_account_id THEN
-      SELECT person_name INTO v_night_account_name FROM accounts WHERE id = v_night.account_id;
-      v_amount_str := TO_CHAR(
-        CASE WHEN v_idx = v_count THEN v_last_night_cents ELSE v_per_night_cents END / 100.0,
-        'FM999990.00'
-      );
+  -- Create one action item per receiving account (aggregated)
+  IF v_paying_account_id IS NOT NULL THEN
+    FOR v_transfer IN
+      SELECT
+        d.account_id,
+        a.person_name AS to_name,
+        TO_CHAR(SUM(d.amount), 'FM999990.00') AS total_amount,
+        STRING_AGG(n.night_number::TEXT, ', ' ORDER BY n.night_number) AS night_numbers
+      FROM lump_sum_distributions d
+      JOIN nights n ON n.id = d.night_id
+      JOIN accounts a ON a.id = d.account_id
+      WHERE d.donation_id = NEW.id
+        AND d.account_id != v_paying_account_id
+      GROUP BY d.account_id, a.person_name
+    LOOP
       INSERT INTO action_items (campaign_id, description, related_donation_id)
       VALUES (
         v_campaign_id,
-        'Transfer $' || v_amount_str
+        'Transfer $' || v_transfer.total_amount
           || ' from ' || COALESCE(v_paying_account_name, 'unknown')
-          || ' to ' || COALESCE(v_night_account_name, 'unknown')
-          || ' for Night ' || v_night.night_number
+          || ' to ' || COALESCE(v_transfer.to_name, 'unknown')
+          || ' (Nights ' || v_transfer.night_numbers || ')'
           || ' — Whole month donation from ' || NEW.donor_first_name || ' ' || NEW.donor_last_initial || '.',
         NEW.id
       );
-    END IF;
-  END LOOP;
+    END LOOP;
+  END IF;
 
   RETURN NEW;
 END;
