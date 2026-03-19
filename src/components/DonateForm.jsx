@@ -86,7 +86,7 @@ export default function DonateForm({ onDonate }) {
       </label>
 
       {/* Name fields */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 max-w-md">
         <div className="flex-1">
           <label className="block text-xs tracking-widest uppercase text-warm-gray mb-2">First Name</label>
           <input
