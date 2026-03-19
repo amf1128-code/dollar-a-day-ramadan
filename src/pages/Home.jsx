@@ -132,7 +132,14 @@ export default function Home() {
       donation.donor_zelle_identifier = paymentHandle;
     }
 
-    logger.info('donation', 'Attempting database insert', { nightNumber: tonight?.night_number, amount: donationData.amount });
+    const { data: { session } } = await supabase.auth.getSession();
+    logger.info('donation', 'Attempting database insert', {
+      nightNumber: tonight?.night_number,
+      amount: donationData.amount,
+      hasSession: !!session,
+      role: session ? 'authenticated' : 'anon',
+      donation,
+    });
 
     const { error } = await supabase.from('donations').insert(donation);
 
