@@ -1,7 +1,7 @@
 import { censorPaymentNote } from './censor';
 
 export function buildVenmoDeeplink({ recipientHandle, amount, nightNumber, charityName, isLumpSum }) {
-  const label = isLumpSum ? 'Ramadan Lump Sum' : `Ramadan Night ${nightNumber} - ${charityName}`;
+  const label = isLumpSum ? 'Ramadan Whole Month Donation' : `Ramadan Night ${nightNumber} - ${charityName}`;
   const note = censorPaymentNote(`${label} - $${amount}`);
   const encodedNote = encodeURIComponent(note);
   const handle = recipientHandle.replace('@', '');
@@ -9,6 +9,6 @@ export function buildVenmoDeeplink({ recipientHandle, amount, nightNumber, chari
 }
 
 export function buildPaymentNote({ nightNumber, charityName, amount, isLumpSum }) {
-  const label = isLumpSum ? 'Ramadan Lump Sum' : `Ramadan Night ${nightNumber} - ${charityName}`;
+  const label = isLumpSum ? 'Ramadan Whole Month Donation' : `Ramadan Night ${nightNumber} - ${charityName}`;
   return censorPaymentNote(`${label} - $${amount}`);
 }
