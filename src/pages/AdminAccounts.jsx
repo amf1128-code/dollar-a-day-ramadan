@@ -46,15 +46,76 @@ export default function AdminAccounts() {
     return nights.filter((n) => n.account_id === accountId).map((n) => n.night_number).sort((a, b) => a - b);
   }
 
-  function getAccountTotal(accountId) {
+  function getAccountTally(accountId) {
     const accountNightIds = nights.filter((n) => n.account_id === accountId).map((n) => n.id);
-    const directDonations = donations
+    const today = new Date().toISOString().split('T')[0];
+    const pastNightIds = nights.filter((n) => n.account_id === accountId && n.date <= today).map((n) => n.id);
+
+    // Money IN: regular donations to my nights + full lump sums I collected
+    const directReceived = donations
       .filter((d) => d.is_confirmed && !d.is_lump_sum && accountNightIds.includes(d.night_id))
       .reduce((sum, d) => sum + parseFloat(d.amount), 0);
-    const lumpDistributions = distributions
-      .filter((d) => d.account_id === accountId && d.is_transferred)
+    const lumpSumsCollected = donations
+      .filter((d) => d.is_confirmed && d.is_lump_sum && d.paying_account_id === accountId)
       .reduce((sum, d) => sum + parseFloat(d.amount), 0);
-    return directDonations + lumpDistributions;
+    const totalReceived = directReceived + lumpSumsCollected;
+
+    // Money I owe to other accounts (lump sum portions for others' nights)
+    const oweToOthers = distributions
+      .filter((d) => {
+        const donation = donations.find((don) => don.id === d.donation_id);
+        return donation && donation.paying_account_id === accountId && d.account_id !== accountId;
+      })
+      .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
+    // Of that, how much has been transferred
+    const transferred = distributions
+      .filter((d) => {
+        const donation = donations.find((don) => don.id === d.donation_id);
+        return donation && donation.paying_account_id === accountId && d.account_id !== accountId && d.is_transferred;
+      })
+      .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
+    // My share = what I should donate to charities across my nights
+    const myShare = totalReceived - oweToOthers;
+
+    // Plus: money others owe ME (lump sums collected by others with distributions to my nights)
+    const owedToMe = distributions
+      .filter((d) => {
+        const donation = donations.find((don) => don.id === d.donation_id);
+        return donation && donation.paying_account_id !== accountId && d.account_id === accountId;
+      })
+      .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+    const receivedFromOthers = distributions
+      .filter((d) => {
+        const donation = donations.find((don) => don.id === d.donation_id);
+        return donation && donation.paying_account_id !== accountId && d.account_id === accountId && d.is_transferred;
+      })
+      .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
+    // Total I should donate to charity = my share from what I collected + what others transfer to me
+    const totalToDonate = myShare + owedToMe;
+
+    // How much of totalToDonate is for past nights (due now)
+    const dueSoFar = donations
+      .filter((d) => d.is_confirmed && !d.is_lump_sum && pastNightIds.includes(d.night_id))
+      .reduce((sum, d) => sum + parseFloat(d.amount), 0)
+      + distributions
+        .filter((d) => pastNightIds.includes(d.night_id) && d.account_id === accountId)
+        .reduce((sum, d) => sum + parseFloat(d.amount), 0);
+
+    return {
+      totalReceived,
+      oweToOthers,
+      transferred,
+      pendingOut: oweToOthers - transferred,
+      myShare,
+      owedToMe,
+      receivedFromOthers,
+      pendingIn: owedToMe - receivedFromOthers,
+      totalToDonate,
+      dueSoFar,
+    };
   }
 
   async function handleSave() {
@@ -175,7 +236,7 @@ export default function AdminAccounts() {
       <div className="space-y-4">
         {accounts.map((account) => {
           const assignedNights = getAccountNights(account.id);
-          const total = getAccountTotal(account.id);
+          const tally = getAccountTally(account.id);
           return (
             <div key={account.id} className="p-4 border border-warm-gray-light bg-white/40">
               <div className="flex items-start justify-between mb-3">
@@ -189,15 +250,57 @@ export default function AdminAccounts() {
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="font-serif text-xl text-maroon">${total.toFixed(2)}</p>
-                  <p className="text-xs text-warm-gray">total collected</p>
+                  <p className="font-serif text-xl text-maroon">${tally.totalToDonate.toFixed(2)}</p>
+                  <p className="text-xs text-warm-gray">total to donate</p>
                 </div>
               </div>
+
               {assignedNights.length > 0 && (
                 <p className="text-xs text-warm-gray-dark mb-2">
                   Assigned nights: {assignedNights.join(', ')}
                 </p>
               )}
+
+              {/* Running tally */}
+              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs border-t border-warm-gray-light/50 pt-3">
+                <div className="flex justify-between">
+                  <span className="text-warm-gray">Received:</span>
+                  <span className="font-serif">${tally.totalReceived.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-warm-gray">Due so far (past nights):</span>
+                  <span className="font-serif">${tally.dueSoFar.toFixed(2)}</span>
+                </div>
+                {tally.oweToOthers > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-warm-gray">Owe to others:</span>
+                    <span className="font-serif text-maroon">-${tally.oweToOthers.toFixed(2)}</span>
+                  </div>
+                )}
+                {tally.oweToOthers > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-warm-gray">Transferred out:</span>
+                    <span className="font-serif">${tally.transferred.toFixed(2)}{tally.pendingOut > 0 ? ` (${tally.pendingOut.toFixed(2)} pending)` : ''}</span>
+                  </div>
+                )}
+                {tally.owedToMe > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-warm-gray">Owed to me:</span>
+                    <span className="font-serif">+${tally.owedToMe.toFixed(2)}</span>
+                  </div>
+                )}
+                {tally.owedToMe > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-warm-gray">Received from others:</span>
+                    <span className="font-serif">${tally.receivedFromOthers.toFixed(2)}{tally.pendingIn > 0 ? ` (${tally.pendingIn.toFixed(2)} pending)` : ''}</span>
+                  </div>
+                )}
+                <div className="flex justify-between col-span-2 border-t border-warm-gray-light/50 pt-1 mt-1">
+                  <span className="text-warm-gray font-bold">Your share to donate:</span>
+                  <span className="font-serif font-bold">${tally.myShare.toFixed(2)}</span>
+                </div>
+              </div>
+
               <div className="flex gap-3 mt-3">
                 <button
                   onClick={() => handleEdit(account)}

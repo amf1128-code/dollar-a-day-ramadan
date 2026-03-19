@@ -61,21 +61,76 @@ export default function AdminLedger() {
     return accounts.find((a) => a.id === accountId)?.person_name || 'Unknown';
   }
 
-  const filteredDonations = donations.filter((d) => {
-    if (filter === 'all') return true;
-    const nightInfo = getNightInfo(d.night_id);
-    if (filter.startsWith('night-')) {
-      return nightInfo?.night_number === parseInt(filter.split('-')[1]);
-    }
-    return true;
-  });
+  // Determine if we're filtering to a specific night
+  const selectedNightNumber = filter.startsWith('night-') ? parseInt(filter.split('-')[1]) : null;
+  const selectedNight = selectedNightNumber ? nights.find((n) => n.night_number === selectedNightNumber) : null;
 
-  // Sort: regular first, lump sum at bottom
+  // Build unified rows when filtering by night
+  function getNightRows() {
+    if (!selectedNight) return null;
+
+    const rows = [];
+
+    // Regular donations for this night
+    donations
+      .filter((d) => !d.is_lump_sum && d.night_id === selectedNight.id && d.is_confirmed)
+      .forEach((d) => {
+        rows.push({
+          key: d.id,
+          donor: `${d.donor_first_name} ${d.donor_last_initial}.`,
+          amount: parseFloat(d.amount),
+          method: d.payment_method,
+          handle: d.donor_venmo_handle || d.donor_zelle_identifier || '-',
+          source: 'Direct',
+          date: d.created_at,
+          donation: d,
+        });
+      });
+
+    // Lump sum distribution portions for this night
+    distributions
+      .filter((dist) => dist.night_id === selectedNight.id)
+      .forEach((dist) => {
+        const donation = donations.find((d) => d.id === dist.donation_id);
+        if (!donation || !donation.is_confirmed) return;
+        rows.push({
+          key: `dist-${dist.id}`,
+          donor: `${donation.donor_first_name} ${donation.donor_last_initial}.`,
+          amount: parseFloat(dist.amount),
+          method: donation.payment_method,
+          handle: donation.donor_venmo_handle || donation.donor_zelle_identifier || '-',
+          source: `Lump ($${parseFloat(donation.amount).toFixed(0)} total)`,
+          date: donation.created_at,
+          donation,
+          isDistribution: true,
+          transferred: dist.is_transferred,
+          collectedBy: donation.paying_account_id ? getAccountName(donation.paying_account_id) : '-',
+        });
+      });
+
+    return rows;
+  }
+
+  // For "all" view, keep existing behavior
+  const filteredDonations = filter === 'all'
+    ? donations
+    : donations.filter((d) => {
+        const nightInfo = getNightInfo(d.night_id);
+        return nightInfo?.night_number === selectedNightNumber;
+      });
+
   const regular = filteredDonations.filter((d) => !d.is_lump_sum);
   const lumpSums = filteredDonations.filter((d) => d.is_lump_sum);
   const sortedDonations = [...regular, ...lumpSums];
 
-  const total = filteredDonations
+  // Calculate night total (direct + lump portions) when filtered
+  const nightRows = getNightRows();
+  const nightTotal = nightRows
+    ? nightRows.reduce((sum, r) => sum + r.amount, 0)
+    : null;
+
+  // For "all" view total
+  const allTotal = filteredDonations
     .filter((d) => d.is_confirmed)
     .reduce((sum, d) => sum + parseFloat(d.amount), 0);
 
@@ -263,120 +318,190 @@ export default function AdminLedger() {
           onChange={(e) => setFilter(e.target.value)}
           className="border-b border-warm-gray-light bg-transparent py-1 text-sm focus:outline-none focus:border-maroon"
         >
-          <option value="all">All Nights</option>
+          <option value="all">All Donations</option>
           {nights.map((n) => (
             <option key={n.id} value={`night-${n.night_number}`}>Night {n.night_number} - {n.charity_name}</option>
           ))}
         </select>
-        <span className="ml-auto font-serif text-lg text-maroon">${total.toFixed(2)} total</span>
+        <span className="ml-auto font-serif text-lg text-maroon">
+          ${(nightTotal !== null ? nightTotal : allTotal).toFixed(2)}
+          {nightTotal !== null ? ' night total' : ' total'}
+        </span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-warm-gray-light text-xs tracking-widest uppercase text-warm-gray">
-              <th className="py-2 px-2 text-left">Donor</th>
-              <th className="py-2 px-2 text-right">Amount</th>
-              <th className="py-2 px-2 text-left">Method</th>
-              <th className="py-2 px-2 text-left">Handle</th>
-              <th className="py-2 px-2 text-center">Night</th>
-              <th className="py-2 px-2 text-left">Charity</th>
-              <th className="py-2 px-2 text-center">Lump</th>
-              <th className="py-2 px-2 text-center">Confirmed</th>
-              <th className="py-2 px-2 text-left">Date</th>
-              <th className="py-2 px-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {regular.map((d) => {
-              const night = getNightInfo(d.night_id);
-              return (
-                <tr key={d.id} className="border-b border-warm-gray-light/50">
-                  <td className="py-2 px-2">{d.donor_first_name} {d.donor_last_initial}.</td>
-                  <td className="py-2 px-2 text-right font-serif">${parseFloat(d.amount).toFixed(2)}</td>
-                  <td className="py-2 px-2 capitalize">{d.payment_method}</td>
-                  <td className="py-2 px-2 text-warm-gray">{d.donor_venmo_handle || d.donor_zelle_identifier || '-'}</td>
-                  <td className="py-2 px-2 text-center">{night?.night_number || '-'}</td>
-                  <td className="py-2 px-2">{night?.charity_name || '-'}</td>
-                  <td className="py-2 px-2 text-center">-</td>
-                  <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
-                  <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
+      {/* === NIGHT VIEW: unified rows (direct + lump portions) === */}
+      {nightRows ? (
+        <div className="overflow-x-auto">
+          {selectedNight && (
+            <div className="mb-4 p-3 border border-warm-gray-light/50 bg-white/30 text-sm">
+              <span className="font-serif font-bold">Night {selectedNight.night_number}</span>
+              {' — '}{selectedNight.charity_name}
+              {selectedNight.account_id && (
+                <span className="text-warm-gray"> ({getAccountName(selectedNight.account_id)})</span>
+              )}
+            </div>
+          )}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-warm-gray-light text-xs tracking-widest uppercase text-warm-gray">
+                <th className="py-2 px-2 text-left">Donor</th>
+                <th className="py-2 px-2 text-right">Amount</th>
+                <th className="py-2 px-2 text-left">Source</th>
+                <th className="py-2 px-2 text-left">Method</th>
+                <th className="py-2 px-2 text-left">Handle</th>
+                <th className="py-2 px-2 text-left">Collected By</th>
+                <th className="py-2 px-2 text-center">Transferred</th>
+                <th className="py-2 px-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {nightRows.map((row) => (
+                <tr key={row.key} className="border-b border-warm-gray-light/50">
+                  <td className="py-2 px-2">{row.donor}</td>
+                  <td className="py-2 px-2 text-right font-serif">${row.amount.toFixed(2)}</td>
+                  <td className="py-2 px-2">
+                    {row.isDistribution ? (
+                      <span className="text-xs bg-gold/20 text-warm-gray-dark px-2 py-0.5">{row.source}</span>
+                    ) : (
+                      <span className="text-xs">Direct</span>
+                    )}
+                  </td>
+                  <td className="py-2 px-2 capitalize">{row.method}</td>
+                  <td className="py-2 px-2 text-warm-gray">{row.handle}</td>
+                  <td className="py-2 px-2 text-warm-gray">{row.collectedBy || '-'}</td>
                   <td className="py-2 px-2 text-center">
-                    <button onClick={() => handleDeleteDonation(d)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
+                    {row.isDistribution ? (row.transferred ? 'Yes' : 'No') : '-'}
+                  </td>
+                  <td className="py-2 px-2 text-center">
+                    {!row.isDistribution && (
+                      <button onClick={() => handleDeleteDonation(row.donation)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
+                    )}
                   </td>
                 </tr>
-              );
-            })}
-
-            {lumpSums.length > 0 && regular.length > 0 && (
-              <tr>
-                <td colSpan={9} className="py-3">
-                  <div className="border-t-2 border-warm-gray-light"></div>
-                  <p className="text-xs tracking-widest uppercase text-warm-gray mt-2">Lump Sum Donations</p>
-                </td>
+              ))}
+              {nightRows.length > 0 && (
+                <tr className="border-t-2 border-warm-gray-light font-serif">
+                  <td className="py-2 px-2 font-bold">Total</td>
+                  <td className="py-2 px-2 text-right font-bold text-maroon">${nightTotal.toFixed(2)}</td>
+                  <td colSpan={6}></td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {nightRows.length === 0 && (
+            <p className="text-warm-gray italic font-serif text-center py-8">
+              No donations for this night yet.
+            </p>
+          )}
+        </div>
+      ) : (
+        /* === ALL VIEW: original grouped layout === */
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-warm-gray-light text-xs tracking-widest uppercase text-warm-gray">
+                <th className="py-2 px-2 text-left">Donor</th>
+                <th className="py-2 px-2 text-right">Amount</th>
+                <th className="py-2 px-2 text-left">Method</th>
+                <th className="py-2 px-2 text-left">Handle</th>
+                <th className="py-2 px-2 text-center">Night</th>
+                <th className="py-2 px-2 text-left">Charity</th>
+                <th className="py-2 px-2 text-center">Lump</th>
+                <th className="py-2 px-2 text-center">Confirmed</th>
+                <th className="py-2 px-2 text-left">Date</th>
+                <th className="py-2 px-2"></th>
               </tr>
-            )}
-
-            {lumpSums.map((d) => {
-              const night = getNightInfo(d.night_id);
-              const dists = distributions.filter((dist) => dist.donation_id === d.id);
-              const isExpanded = expandedId === d.id;
-
-              return [
-                <tr key={d.id} className="border-b border-warm-gray-light/50 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : d.id)}>
-                  <td className="py-2 px-2">{d.donor_first_name} {d.donor_last_initial}.</td>
-                  <td className="py-2 px-2 text-right font-serif">${parseFloat(d.amount).toFixed(2)}</td>
-                  <td className="py-2 px-2 capitalize">{d.payment_method}</td>
-                  <td className="py-2 px-2 text-warm-gray">{d.donor_venmo_handle || d.donor_zelle_identifier || '-'}</td>
-                  <td className="py-2 px-2 text-center">Lump Sum</td>
-                  <td className="py-2 px-2">{night?.charity_name || '-'}</td>
-                  <td className="py-2 px-2 text-center">Yes</td>
-                  <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
-                  <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
-                  <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => handleDeleteDonation(d)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
-                  </td>
-                </tr>,
-                isExpanded && dists.length > 0 && (
-                  <tr key={`${d.id}-dists`}>
-                    <td colSpan={9} className="py-0 pl-6 pb-3">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-warm-gray tracking-widest uppercase">
-                            <th className="py-1 text-left">Night</th>
-                            <th className="py-1 text-right">Amount</th>
-                            <th className="py-1 text-left">Account</th>
-                            <th className="py-1 text-center">Transferred</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dists.map((dist) => {
-                            const distNight = getNightInfo(dist.night_id);
-                            return (
-                              <tr key={dist.id} className="border-b border-warm-gray-light/30">
-                                <td className="py-1">Night {distNight?.night_number || '?'}</td>
-                                <td className="py-1 text-right">${parseFloat(dist.amount).toFixed(2)}</td>
-                                <td className="py-1">{getAccountName(dist.account_id)}</td>
-                                <td className="py-1 text-center">{dist.is_transferred ? 'Yes' : 'No'}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+            </thead>
+            <tbody>
+              {regular.map((d) => {
+                const night = getNightInfo(d.night_id);
+                return (
+                  <tr key={d.id} className="border-b border-warm-gray-light/50">
+                    <td className="py-2 px-2">{d.donor_first_name} {d.donor_last_initial}.</td>
+                    <td className="py-2 px-2 text-right font-serif">${parseFloat(d.amount).toFixed(2)}</td>
+                    <td className="py-2 px-2 capitalize">{d.payment_method}</td>
+                    <td className="py-2 px-2 text-warm-gray">{d.donor_venmo_handle || d.donor_zelle_identifier || '-'}</td>
+                    <td className="py-2 px-2 text-center">{night?.night_number || '-'}</td>
+                    <td className="py-2 px-2">{night?.charity_name || '-'}</td>
+                    <td className="py-2 px-2 text-center">-</td>
+                    <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
+                    <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
+                    <td className="py-2 px-2 text-center">
+                      <button onClick={() => handleDeleteDonation(d)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
                     </td>
                   </tr>
-                ),
-              ];
-            })}
-          </tbody>
-        </table>
-      </div>
+                );
+              })}
 
-      {sortedDonations.length === 0 && (
-        <p className="text-warm-gray italic font-serif text-center py-8">
-          No donations yet.
-        </p>
+              {lumpSums.length > 0 && regular.length > 0 && (
+                <tr>
+                  <td colSpan={10} className="py-3">
+                    <div className="border-t-2 border-warm-gray-light"></div>
+                    <p className="text-xs tracking-widest uppercase text-warm-gray mt-2">Lump Sum Donations</p>
+                  </td>
+                </tr>
+              )}
+
+              {lumpSums.map((d) => {
+                const night = getNightInfo(d.night_id);
+                const dists = distributions.filter((dist) => dist.donation_id === d.id);
+                const isExpanded = expandedId === d.id;
+
+                return [
+                  <tr key={d.id} className="border-b border-warm-gray-light/50 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : d.id)}>
+                    <td className="py-2 px-2">{d.donor_first_name} {d.donor_last_initial}.</td>
+                    <td className="py-2 px-2 text-right font-serif">${parseFloat(d.amount).toFixed(2)}</td>
+                    <td className="py-2 px-2 capitalize">{d.payment_method}</td>
+                    <td className="py-2 px-2 text-warm-gray">{d.donor_venmo_handle || d.donor_zelle_identifier || '-'}</td>
+                    <td className="py-2 px-2 text-center">Lump Sum</td>
+                    <td className="py-2 px-2">{night?.charity_name || '-'}</td>
+                    <td className="py-2 px-2 text-center">Yes</td>
+                    <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
+                    <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
+                    <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => handleDeleteDonation(d)} className="text-warm-gray hover:text-maroon transition-colors cursor-pointer text-xs" title="Delete donation">✕</button>
+                    </td>
+                  </tr>,
+                  isExpanded && dists.length > 0 && (
+                    <tr key={`${d.id}-dists`}>
+                      <td colSpan={10} className="py-0 pl-6 pb-3">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-warm-gray tracking-widest uppercase">
+                              <th className="py-1 text-left">Night</th>
+                              <th className="py-1 text-right">Amount</th>
+                              <th className="py-1 text-left">Account</th>
+                              <th className="py-1 text-center">Transferred</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dists.map((dist) => {
+                              const distNight = getNightInfo(dist.night_id);
+                              return (
+                                <tr key={dist.id} className="border-b border-warm-gray-light/30">
+                                  <td className="py-1">Night {distNight?.night_number || '?'}</td>
+                                  <td className="py-1 text-right">${parseFloat(dist.amount).toFixed(2)}</td>
+                                  <td className="py-1">{getAccountName(dist.account_id)}</td>
+                                  <td className="py-1 text-center">{dist.is_transferred ? 'Yes' : 'No'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+            </tbody>
+          </table>
+
+          {sortedDonations.length === 0 && (
+            <p className="text-warm-gray italic font-serif text-center py-8">
+              No donations yet.
+            </p>
+          )}
+        </div>
       )}
     </AdminLayout>
   );
