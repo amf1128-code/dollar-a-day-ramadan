@@ -31,34 +31,33 @@ A mobile-first web app for managing a community Ramadan donation campaign. Every
    INSERT INTO admin_users (user_id) VALUES ('YOUR-USER-UUID-HERE');
    ```
 
-### 4. Set Environment Variables
+### 4. Deploy to Netlify
 
-1. Copy `.env.example` to `.env`:
-   ```
+1. Push this repo to GitHub (or connect it if it's already there)
+2. In Netlify, click **New site from Git** and select your repo
+3. Build settings are already configured — you don't need to change anything there
+4. **Add your environment variables** in Netlify: go to **Site settings > Environment variables** and add these two:
+   - `VITE_SUPABASE_URL` — set this to your Supabase project URL (e.g. `https://abcdef.supabase.co`)
+   - `VITE_SUPABASE_ANON_KEY` — set this to the anon/public key from your Supabase project
+   - You can find both of these in your Supabase dashboard under **Settings > API**
+5. Click **Deploy** (or trigger a redeploy if it already deployed without the variables)
+
+### 5. Run Locally (Optional — only if you want to test on your own computer)
+
+This step is not required for deployment. Skip it if you just want to get the site live.
+
+1. Install [Node.js](https://nodejs.org/) if you don't have it
+2. In a terminal, navigate to the project folder and run:
+   ```bash
    cp .env.example .env
    ```
-2. Fill in your Supabase URL and anon key:
+3. Open the `.env` file in a text editor and fill in your Supabase URL and anon key
+4. Run:
+   ```bash
+   npm install
+   npm run dev
    ```
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-anon-key-here
-   ```
-
-### 5. Run Locally
-
-```bash
-npm install
-npm run dev
-```
-
-### 6. Deploy to Netlify
-
-1. Push this repo to GitHub
-2. In Netlify, click **New site from Git** and select your repo
-3. Build settings are already configured in `netlify.toml`
-4. Add environment variables in Netlify: **Site settings > Environment variables**
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-5. Deploy
+5. Open http://localhost:5173 in your browser
 
 ## How to Use
 
