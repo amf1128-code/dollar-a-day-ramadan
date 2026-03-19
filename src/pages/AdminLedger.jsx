@@ -183,12 +183,20 @@ export default function AdminLedger() {
             </div>
             <div>
               <label className="block text-xs tracking-widest uppercase text-warm-gray mb-1">Night</label>
-              <select value={manualForm.night_id} onChange={(e) => setManualForm({ ...manualForm, night_id: e.target.value })} className="w-full border-b border-warm-gray-light bg-transparent py-1 text-sm focus:outline-none focus:border-maroon">
-                <option value="">N/A (Lump Sum)</option>
-                {nights.map((n) => (
-                  <option key={n.id} value={n.id}>Night {n.night_number} - {n.charity_name}</option>
-                ))}
+              <select value={manualForm.night_id} onChange={(e) => setManualForm({ ...manualForm, night_id: e.target.value, is_lump_sum: !e.target.value })} className="w-full border-b border-warm-gray-light bg-transparent py-1 text-sm focus:outline-none focus:border-maroon">
+                <option value="">Whole Month (Lump Sum)</option>
+                {nights.map((n) => {
+                  const acct = accounts.find((a) => a.id === n.account_id);
+                  return (
+                    <option key={n.id} value={n.id}>Night {n.night_number} - {n.charity_name}{acct ? ` (${acct.person_name})` : ''}</option>
+                  );
+                })}
               </select>
+              {manualForm.night_id && (() => {
+                const selectedNight = nights.find((n) => n.id === manualForm.night_id);
+                const acct = selectedNight && accounts.find((a) => a.id === selectedNight.account_id);
+                return acct ? <p className="text-xs text-warm-gray mt-1">Account: {acct.person_name}</p> : null;
+              })()}
             </div>
             <div>
               <label className="block text-xs tracking-widest uppercase text-warm-gray mb-1">Method</label>
@@ -202,10 +210,6 @@ export default function AdminLedger() {
               <input type="text" value={manualForm.donor_venmo_handle} onChange={(e) => setManualForm({ ...manualForm, donor_venmo_handle: e.target.value })} className="w-full border-b border-warm-gray-light bg-transparent py-1 text-sm focus:outline-none focus:border-maroon" />
             </div>
             <div className="flex items-center gap-4 pt-5">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" checked={manualForm.is_lump_sum} onChange={(e) => setManualForm({ ...manualForm, is_lump_sum: e.target.checked })} className="accent-maroon" />
-                Lump Sum
-              </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" checked={manualForm.is_confirmed} onChange={(e) => setManualForm({ ...manualForm, is_confirmed: e.target.checked })} className="accent-maroon" />
                 Confirmed
