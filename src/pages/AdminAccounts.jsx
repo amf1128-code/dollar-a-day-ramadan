@@ -57,7 +57,10 @@ export default function AdminAccounts() {
   }
 
   async function handleSave() {
-    if (!campaign) return;
+    if (!campaign) {
+      setMessage('No active campaign found. Please create one in the Setup tab first.');
+      return;
+    }
     if (!form.person_name.trim()) {
       setMessage('Person name is required.');
       return;
