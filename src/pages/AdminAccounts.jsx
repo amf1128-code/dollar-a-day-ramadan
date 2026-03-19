@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { normalizeVenmoHandle } from '../lib/validation';
 import AdminLayout from '../components/AdminLayout';
 
 export default function AdminAccounts() {
@@ -69,7 +70,7 @@ export default function AdminAccounts() {
     const payload = {
       campaign_id: campaign.id,
       person_name: form.person_name.trim(),
-      venmo_handle: form.venmo_handle.trim() || null,
+      venmo_handle: normalizeVenmoHandle(form.venmo_handle) || null,
       zelle_identifier: form.zelle_identifier.trim() || null,
     };
 

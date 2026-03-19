@@ -16,9 +16,17 @@ export function validateLastInitial(initial) {
   return null;
 }
 
+export function normalizeVenmoHandle(handle) {
+  if (!handle) return handle;
+  const trimmed = handle.trim();
+  if (trimmed && !trimmed.startsWith('@')) return `@${trimmed}`;
+  return trimmed;
+}
+
 export function validateVenmoHandle(handle) {
   if (!handle) return 'Venmo handle is required';
-  if (!/^@[a-zA-Z0-9-]{2,49}$/.test(handle)) return 'Venmo handle must start with @ and be 3-50 characters (letters, numbers, hyphens)';
+  const normalized = normalizeVenmoHandle(handle);
+  if (!/^@[a-zA-Z0-9-]{2,49}$/.test(normalized)) return 'Venmo handle must be 2-49 characters (letters, numbers, hyphens)';
   return null;
 }
 

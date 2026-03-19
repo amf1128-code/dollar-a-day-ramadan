@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { buildVenmoDeeplink, buildPaymentNote } from '../lib/deeplinks';
-import { validateVenmoHandle, validateZelleIdentifier } from '../lib/validation';
+import { validateVenmoHandle, validateZelleIdentifier, normalizeVenmoHandle } from '../lib/validation';
 import { logger } from '../lib/logger';
 
 export default function PaymentModal({
@@ -107,7 +107,7 @@ export default function PaymentModal({
               <input
                 type="text"
                 value={handle}
-                onChange={(e) => { setHandle(e.target.value); setError(null); }}
+                onChange={(e) => { setHandle(normalizeVenmoHandle(e.target.value)); setError(null); }}
                 placeholder="@your-handle"
                 className="w-full border-b border-warm-gray-light bg-transparent py-2 text-sm focus:outline-none focus:border-maroon"
               />
