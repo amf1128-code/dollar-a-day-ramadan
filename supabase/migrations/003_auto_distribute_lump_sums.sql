@@ -15,6 +15,9 @@ DECLARE
   v_total_cents INT;
   v_idx INT := 0;
   v_paying_account_id UUID;
+  v_paying_account_name TEXT;
+  v_night_account_name TEXT;
+  v_amount_str TEXT;
   v_tonight_date DATE;
   v_campaign_id UUID;
 BEGIN
@@ -43,11 +46,12 @@ BEGIN
   v_last_night_cents := v_total_cents - (v_per_night_cents * (v_count - 1));
 
   -- Find the paying account (tonight's account)
-  SELECT account_id INTO v_paying_account_id
-  FROM nights
-  WHERE campaign_id = v_campaign_id
-    AND date = v_tonight_date
-    AND account_id IS NOT NULL
+  SELECT n.account_id, a.person_name INTO v_paying_account_id, v_paying_account_name
+  FROM nights n
+  JOIN accounts a ON a.id = n.account_id
+  WHERE n.campaign_id = v_campaign_id
+    AND n.date = v_tonight_date
+    AND n.account_id IS NOT NULL
   LIMIT 1;
 
   -- Create distributions for each remaining night
@@ -71,12 +75,19 @@ BEGIN
 
     -- Create action item for transfers to other accounts
     IF v_paying_account_id IS NOT NULL AND v_night.account_id != v_paying_account_id THEN
+      SELECT person_name INTO v_night_account_name FROM accounts WHERE id = v_night.account_id;
+      v_amount_str := TO_CHAR(
+        CASE WHEN v_idx = v_count THEN v_last_night_cents ELSE v_per_night_cents END / 100.0,
+        'FM999990.00'
+      );
       INSERT INTO action_items (campaign_id, description, related_donation_id)
       VALUES (
         v_campaign_id,
-        'Transfer $' || (CASE WHEN v_idx = v_count THEN v_last_night_cents ELSE v_per_night_cents END / 100.0)::TEXT
-          || ' to account for Night ' || v_night.night_number
-          || ' — Lump sum from ' || NEW.donor_first_name || ' ' || NEW.donor_last_initial || '.',
+        'Transfer $' || v_amount_str
+          || ' from ' || COALESCE(v_paying_account_name, 'unknown')
+          || ' to ' || COALESCE(v_night_account_name, 'unknown')
+          || ' for Night ' || v_night.night_number
+          || ' — Whole month donation from ' || NEW.donor_first_name || ' ' || NEW.donor_last_initial || '.',
         NEW.id
       );
     END IF;
