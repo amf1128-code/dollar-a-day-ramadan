@@ -176,10 +176,6 @@ export default function AdminAccounts() {
         {accounts.map((account) => {
           const assignedNights = getAccountNights(account.id);
           const total = getAccountTotal(account.id);
-          const pendingDists = distributions.filter(
-            (d) => d.account_id === account.id && !d.is_transferred
-          );
-
           return (
             <div key={account.id} className="p-4 border border-warm-gray-light bg-white/40">
               <div className="flex items-start justify-between mb-3">
@@ -200,11 +196,6 @@ export default function AdminAccounts() {
               {assignedNights.length > 0 && (
                 <p className="text-xs text-warm-gray-dark mb-2">
                   Assigned nights: {assignedNights.join(', ')}
-                </p>
-              )}
-              {pendingDists.length > 0 && (
-                <p className="text-xs text-maroon">
-                  {pendingDists.length} pending lump sum transfer(s)
                 </p>
               )}
               <div className="flex gap-3 mt-3">
