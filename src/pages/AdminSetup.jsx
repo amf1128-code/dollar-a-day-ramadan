@@ -182,6 +182,9 @@ export default function AdminSetup() {
       if (!n.charity_name || n.charity_name.length === 0 || n.charity_name.length > 200) {
         errors.push(`Row ${i + 1}: charity_name must be 1-200 characters`);
       }
+      if (!n.account_id) {
+        errors.push(`Row ${i + 1}: account is required${n.account_name ? ` ("${n.account_name}" not found)` : ''}`);
+      }
     }
     return errors;
   }
@@ -216,6 +219,7 @@ export default function AdminSetup() {
             charity_url: String(row.charity_url || ''),
             is_zakat_eligible: row.is_zakat_eligible === true || row.is_zakat_eligible === 'true' || row.is_zakat_eligible === 'TRUE',
             account_id: accountMatch?.id || '',
+            account_name: String(row.account_name || ''),
           };
         });
 
