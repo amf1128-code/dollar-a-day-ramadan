@@ -282,53 +282,48 @@ export default function AdminLedger() {
               const dists = distributions.filter((dist) => dist.donation_id === d.id);
               const isExpanded = expandedId === d.id;
 
-              return (
-                <tr key={d.id} className="border-b border-warm-gray-light/50">
-                  <td colSpan={9} className="py-0">
-                    <div
-                      className="flex items-center py-2 cursor-pointer"
-                      onClick={() => setExpandedId(isExpanded ? null : d.id)}
-                    >
-                      <span className="px-2 flex-none w-32">{d.donor_first_name} {d.donor_last_initial}.</span>
-                      <span className="px-2 flex-none w-20 text-right font-serif">${parseFloat(d.amount).toFixed(2)}</span>
-                      <span className="px-2 flex-none w-16 capitalize">{d.payment_method}</span>
-                      <span className="px-2 flex-none w-24 text-warm-gray">{d.donor_venmo_handle || d.donor_zelle_identifier || '-'}</span>
-                      <span className="px-2 flex-none w-12 text-center">{night?.night_number || '-'}</span>
-                      <span className="px-2 flex-1">{night?.charity_name || 'Lump Sum'}</span>
-                      <span className="px-2 flex-none w-12 text-center">Yes</span>
-                      <span className="px-2 flex-none w-16 text-center">{d.is_confirmed ? 'Yes' : 'No'}</span>
-                      <span className="px-2 flex-none w-24 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</span>
-                    </div>
-                    {isExpanded && dists.length > 0 && (
-                      <div className="pl-6 pb-3">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-warm-gray tracking-widest uppercase">
-                              <th className="py-1 text-left">Night</th>
-                              <th className="py-1 text-right">Amount</th>
-                              <th className="py-1 text-left">Account</th>
-                              <th className="py-1 text-center">Transferred</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dists.map((dist) => {
-                              const distNight = getNightInfo(dist.night_id);
-                              return (
-                                <tr key={dist.id} className="border-b border-warm-gray-light/30">
-                                  <td className="py-1">Night {distNight?.night_number || '?'}</td>
-                                  <td className="py-1 text-right">${parseFloat(dist.amount).toFixed(2)}</td>
-                                  <td className="py-1">{getAccountName(dist.account_id)}</td>
-                                  <td className="py-1 text-center">{dist.is_transferred ? 'Yes' : 'No'}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
+              return [
+                <tr key={d.id} className="border-b border-warm-gray-light/50 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : d.id)}>
+                  <td className="py-2 px-2">{d.donor_first_name} {d.donor_last_initial}.</td>
+                  <td className="py-2 px-2 text-right font-serif">${parseFloat(d.amount).toFixed(2)}</td>
+                  <td className="py-2 px-2 capitalize">{d.payment_method}</td>
+                  <td className="py-2 px-2 text-warm-gray">{d.donor_venmo_handle || d.donor_zelle_identifier || '-'}</td>
+                  <td className="py-2 px-2 text-center">Lump Sum</td>
+                  <td className="py-2 px-2">{night?.charity_name || '-'}</td>
+                  <td className="py-2 px-2 text-center">Yes</td>
+                  <td className="py-2 px-2 text-center">{d.is_confirmed ? 'Yes' : 'No'}</td>
+                  <td className="py-2 px-2 text-warm-gray">{new Date(d.created_at).toLocaleDateString()}</td>
+                </tr>,
+                isExpanded && dists.length > 0 && (
+                  <tr key={`${d.id}-dists`}>
+                    <td colSpan={9} className="py-0 pl-6 pb-3">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-warm-gray tracking-widest uppercase">
+                            <th className="py-1 text-left">Night</th>
+                            <th className="py-1 text-right">Amount</th>
+                            <th className="py-1 text-left">Account</th>
+                            <th className="py-1 text-center">Transferred</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dists.map((dist) => {
+                            const distNight = getNightInfo(dist.night_id);
+                            return (
+                              <tr key={dist.id} className="border-b border-warm-gray-light/30">
+                                <td className="py-1">Night {distNight?.night_number || '?'}</td>
+                                <td className="py-1 text-right">${parseFloat(dist.amount).toFixed(2)}</td>
+                                <td className="py-1">{getAccountName(dist.account_id)}</td>
+                                <td className="py-1 text-center">{dist.is_transferred ? 'Yes' : 'No'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                ),
+              ];
             })}
           </tbody>
         </table>

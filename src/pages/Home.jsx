@@ -229,6 +229,17 @@ export default function Home() {
               Visit Charity
             </a>
           )}
+          {paymentInfo && (paymentInfo.venmo_handle || paymentInfo.zelle_identifier) && (
+            <div className="mt-4 pt-4 border-t border-warm-gray-light/50">
+              <p className="text-xs tracking-widest uppercase text-warm-gray mb-2">Send your donation to</p>
+              {paymentInfo.venmo_handle && (
+                <p className="text-sm text-warm-gray-dark">Venmo: <span className="text-maroon">{paymentInfo.venmo_handle}</span></p>
+              )}
+              {paymentInfo.zelle_identifier && (
+                <p className="text-sm text-warm-gray-dark">Zelle: <span className="text-maroon">{paymentInfo.zelle_identifier}</span></p>
+              )}
+            </div>
+          )}
         </section>
       ) : (
         <section className="px-6 py-8 border-b border-warm-gray-light">
@@ -274,6 +285,7 @@ export default function Home() {
           amount={donationData.amount}
           nightNumber={tonight?.night_number}
           charityName={tonight?.charity_name}
+          isLumpSum={donationData.isLumpSum}
           paymentInfo={paymentInfo}
           onConfirm={handleConfirm}
           onCancel={() => { setShowModal(false); setDonationData(null); }}

@@ -8,6 +8,7 @@ export default function PaymentModal({
   amount,
   nightNumber,
   charityName,
+  isLumpSum,
   paymentInfo,
   onConfirm,
   onCancel,
@@ -17,7 +18,7 @@ export default function PaymentModal({
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const note = buildPaymentNote({ nightNumber, charityName, amount });
+  const note = buildPaymentNote({ nightNumber, charityName, amount, isLumpSum });
 
   function handleCopy(text) {
     navigator.clipboard.writeText(text).then(() => {
@@ -40,6 +41,7 @@ export default function PaymentModal({
         amount,
         nightNumber,
         charityName,
+        isLumpSum,
       });
 
       // Try deeplink
@@ -59,7 +61,7 @@ export default function PaymentModal({
         <div className="bg-cream w-full max-w-md mx-auto p-6 sm:rounded-t-none sm:rounded-lg border-t border-warm-gray-light">
           <h3 className="font-serif text-xl mb-4">Did your payment go through?</h3>
           <p className="text-sm text-warm-gray-dark mb-6">
-            ${amount} via {method === 'venmo' ? 'Venmo' : 'Zelle'} for Night {nightNumber}
+            ${amount} via {method === 'venmo' ? 'Venmo' : 'Zelle'} {isLumpSum ? 'for the entire month' : `for Night ${nightNumber}`}
           </p>
           <div className="flex gap-3">
             <button
