@@ -132,13 +132,17 @@ export default function Home() {
       donation.donor_zelle_identifier = paymentHandle;
     }
 
+    // Sign out any stale admin session so the insert runs as anon role
     const { data: { session } } = await supabase.auth.getSession();
-    logger.info('donation', 'Attempting database insert', {
+    if (session) {
+      logger.warn('donation', 'Active auth session detected on public page, signing out to use anon role');
+      await supabase.auth.signOut();
+    }
+
+    logger.warn('donation', 'Attempting database insert', {
       nightNumber: tonight?.night_number,
       amount: donationData.amount,
-      hasSession: !!session,
-      role: session ? 'authenticated' : 'anon',
-      donation,
+      hadSession: !!session,
     });
 
     const { error } = await supabase.from('donations').insert(donation);
