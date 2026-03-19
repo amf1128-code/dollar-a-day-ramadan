@@ -1,6 +1,24 @@
--- Auto-distribute lump sum donations across remaining nights on insert.
--- Uses SECURITY DEFINER so it can write to lump_sum_distributions and
--- action_items even when the inserting role is anon.
+-- ============================================================
+-- Additional policies, columns, and triggers needed beyond the
+-- initial schema (001).
+-- ============================================================
+
+-- Allow admins to insert donations (manual donation entry in ledger)
+CREATE POLICY "Admin can insert donations"
+  ON donations FOR INSERT TO authenticated
+  WITH CHECK (is_admin());
+
+-- Track which account collected a lump sum payment
+-- (for manual entries where the collector may differ from tonight's account)
+ALTER TABLE donations ADD COLUMN paying_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL;
+
+-- ============================================================
+-- AUTO-DISTRIBUTE LUMP SUM DONATIONS
+-- ============================================================
+-- When a confirmed lump sum donation is inserted, this trigger:
+--   1. Splits the amount evenly across remaining nights (today + future)
+--   2. Creates lump_sum_distributions records crediting each account
+--   3. Creates aggregated action items for inter-account transfers
 
 CREATE OR REPLACE FUNCTION distribute_lump_sum()
 RETURNS TRIGGER
@@ -19,8 +37,6 @@ DECLARE
   v_tonight_date DATE;
   v_campaign_id UUID;
   v_transfer RECORD;
-  v_night_list TEXT;
-  v_amount_str TEXT;
 BEGIN
   -- Only process confirmed lump sum donations
   IF NOT NEW.is_lump_sum OR NOT NEW.is_confirmed THEN
@@ -31,14 +47,13 @@ BEGIN
   v_tonight_date := CURRENT_DATE;
   v_total_cents := ROUND(NEW.amount * 100);
 
-  -- Count remaining nights (today and future)
+  -- Count remaining nights (today and future) with assigned accounts
   SELECT COUNT(*) INTO v_count
   FROM nights
   WHERE campaign_id = v_campaign_id
     AND date >= v_tonight_date
     AND account_id IS NOT NULL;
 
-  -- If no remaining nights, skip distribution
   IF v_count = 0 THEN
     RETURN NEW;
   END IF;
@@ -46,16 +61,23 @@ BEGIN
   v_per_night_cents := v_total_cents / v_count;
   v_last_night_cents := v_total_cents - (v_per_night_cents * (v_count - 1));
 
-  -- Find the paying account (tonight's account)
-  SELECT n.account_id, a.person_name INTO v_paying_account_id, v_paying_account_name
-  FROM nights n
-  JOIN accounts a ON a.id = n.account_id
-  WHERE n.campaign_id = v_campaign_id
-    AND n.date = v_tonight_date
-    AND n.account_id IS NOT NULL
-  LIMIT 1;
+  -- Determine the paying account:
+  --   Use explicit paying_account_id if set (manual entry),
+  --   otherwise fall back to tonight's account (public donation)
+  IF NEW.paying_account_id IS NOT NULL THEN
+    SELECT id, person_name INTO v_paying_account_id, v_paying_account_name
+    FROM accounts WHERE id = NEW.paying_account_id;
+  ELSE
+    SELECT n.account_id, a.person_name INTO v_paying_account_id, v_paying_account_name
+    FROM nights n
+    JOIN accounts a ON a.id = n.account_id
+    WHERE n.campaign_id = v_campaign_id
+      AND n.date = v_tonight_date
+      AND n.account_id IS NOT NULL
+    LIMIT 1;
+  END IF;
 
-  -- Create distributions for each remaining night
+  -- Create per-night distribution records
   FOR v_night IN
     SELECT id AS night_id, night_number, account_id
     FROM nights
@@ -75,7 +97,8 @@ BEGIN
     );
   END LOOP;
 
-  -- Create one action item per receiving account (aggregated)
+  -- Create one aggregated action item per receiving account
+  -- (only for accounts that differ from the paying account)
   IF v_paying_account_id IS NOT NULL THEN
     FOR v_transfer IN
       SELECT
@@ -107,7 +130,6 @@ BEGIN
 END;
 $$;
 
--- Trigger on donation insert
 DROP TRIGGER IF EXISTS trg_distribute_lump_sum ON donations;
 CREATE TRIGGER trg_distribute_lump_sum
   AFTER INSERT ON donations
