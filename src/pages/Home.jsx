@@ -139,10 +139,9 @@ export default function Home() {
       await supabase.auth.signOut();
     }
 
-    logger.warn('donation', 'Attempting database insert', {
+    logger.info('donation', 'Attempting database insert', {
       nightNumber: tonight?.night_number,
       amount: donationData.amount,
-      hadSession: !!session,
     });
 
     const { error } = await supabase.from('donations').insert(donation);
