@@ -194,7 +194,7 @@ export default function AdminSetup() {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const workbook = XLSX.read(evt.target.result, { type: 'array' });
+        const workbook = XLSX.read(evt.target.result, { type: 'array', cellDates: true });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet);
 
@@ -202,9 +202,15 @@ export default function AdminSetup() {
           const accountMatch = accounts.find(
             (a) => a.person_name.toLowerCase() === String(row.account_name || '').toLowerCase()
           );
+          let dateVal = row.date || '';
+          if (dateVal instanceof Date) {
+            dateVal = dateVal.toISOString().split('T')[0];
+          } else {
+            dateVal = String(dateVal);
+          }
           return {
             night_number: parseInt(row.night_number),
-            date: String(row.date || ''),
+            date: dateVal,
             charity_name: String(row.charity_name || ''),
             charity_description: String(row.charity_description || ''),
             charity_url: String(row.charity_url || ''),
