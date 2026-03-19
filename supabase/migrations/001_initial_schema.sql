@@ -11,9 +11,22 @@ CREATE TABLE admin_users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+
+-- Helper function to check admin status (SECURITY DEFINER bypasses RLS to avoid recursion)
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM admin_users WHERE user_id = auth.uid()
+  );
+$$;
+
 CREATE POLICY "Only authenticated admins can read admin_users"
   ON admin_users FOR SELECT TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- Campaigns
 CREATE TABLE campaigns (
@@ -30,13 +43,13 @@ CREATE POLICY "Authenticated can read campaigns"
   ON campaigns FOR SELECT TO authenticated USING (TRUE);
 CREATE POLICY "Admin can insert campaigns"
   ON campaigns FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() IN (SELECT user_id FROM admin_users));
+  WITH CHECK (is_admin());
 CREATE POLICY "Admin can update campaigns"
   ON campaigns FOR UPDATE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can delete campaigns"
   ON campaigns FOR DELETE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- Accounts
 CREATE TABLE accounts (
@@ -51,16 +64,16 @@ ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 -- NO public SELECT policy — anon cannot query accounts directly
 CREATE POLICY "Admin can read accounts"
   ON accounts FOR SELECT TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can insert accounts"
   ON accounts FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() IN (SELECT user_id FROM admin_users));
+  WITH CHECK (is_admin());
 CREATE POLICY "Admin can update accounts"
   ON accounts FOR UPDATE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can delete accounts"
   ON accounts FOR DELETE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- Nights
 CREATE TABLE nights (
@@ -84,13 +97,13 @@ CREATE POLICY "Authenticated can read nights"
   ON nights FOR SELECT TO authenticated USING (TRUE);
 CREATE POLICY "Admin can insert nights"
   ON nights FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() IN (SELECT user_id FROM admin_users));
+  WITH CHECK (is_admin());
 CREATE POLICY "Admin can update nights"
   ON nights FOR UPDATE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can delete nights"
   ON nights FOR DELETE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- Donations
 CREATE TABLE donations (
@@ -119,13 +132,13 @@ CREATE POLICY "Public can insert donations"
 -- NO public SELECT — use RPC for aggregate totals
 CREATE POLICY "Admin can read donations"
   ON donations FOR SELECT TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can update donations"
   ON donations FOR UPDATE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can delete donations"
   ON donations FOR DELETE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- Lump Sum Distributions
 CREATE TABLE lump_sum_distributions (
@@ -140,16 +153,16 @@ CREATE TABLE lump_sum_distributions (
 ALTER TABLE lump_sum_distributions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admin can read lump_sum_distributions"
   ON lump_sum_distributions FOR SELECT TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can insert lump_sum_distributions"
   ON lump_sum_distributions FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() IN (SELECT user_id FROM admin_users));
+  WITH CHECK (is_admin());
 CREATE POLICY "Admin can update lump_sum_distributions"
   ON lump_sum_distributions FOR UPDATE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can delete lump_sum_distributions"
   ON lump_sum_distributions FOR DELETE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- Action Items
 CREATE TABLE action_items (
@@ -163,16 +176,16 @@ CREATE TABLE action_items (
 ALTER TABLE action_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admin can read action_items"
   ON action_items FOR SELECT TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can insert action_items"
   ON action_items FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() IN (SELECT user_id FROM admin_users));
+  WITH CHECK (is_admin());
 CREATE POLICY "Admin can update action_items"
   ON action_items FOR UPDATE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 CREATE POLICY "Admin can delete action_items"
   ON action_items FOR DELETE TO authenticated
-  USING (auth.uid() IN (SELECT user_id FROM admin_users));
+  USING (is_admin());
 
 -- ============================================================
 -- RPC FUNCTIONS (public-safe data access)
