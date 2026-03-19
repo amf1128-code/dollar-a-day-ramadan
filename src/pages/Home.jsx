@@ -211,7 +211,7 @@ export default function Home() {
           )}
           {tonight.charity_url && (
             <a
-              href={tonight.charity_url}
+              href={tonight.charity_url.match(/^https?:\/\//) ? tonight.charity_url : `https://${tonight.charity_url}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block text-xs tracking-widest uppercase text-maroon border-b border-maroon/30 hover:border-maroon transition-colors"
